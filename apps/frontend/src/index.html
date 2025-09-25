@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>SpinLive - Ruleta Interactiva</title>
+  <title>LuckyWheel - Tira de Premios TikTok</title>
   <style>
     body { 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -30,27 +30,63 @@
       position: relative;
       display: inline-block;
       margin: 20px 0;
+      width: 600px;
+      height: 120px;
+      overflow: hidden;
     }
     .wheel-container::before {
       content: '';
       position: absolute;
-      top: -12px;
-      left: -12px;
-      right: -12px;
-      bottom: -12px;
-      border-radius: 50%;
+      top: -8px;
+      left: -8px;
+      right: -8px;
+      bottom: -8px;
+      border-radius: 15px;
       background: linear-gradient(45deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1));
       z-index: -1;
       animation: glow 3s ease-in-out infinite alternate;
     }
     canvas { 
       border: 4px solid #fff; 
-      border-radius: 50%; 
+      border-radius: 12px; 
       box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 8px rgba(255,255,255,0.1);
-      background: radial-gradient(circle at center, #fff 0%, #f0f0f0 100%);
+      background: linear-gradient(to bottom, #fff 0%, #f0f0f0 100%);
     }
     .wheel-container.spinning::before {
       animation: spinGlow 0.5s ease-in-out infinite alternate;
+    }
+    .pointer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 0;
+      height: 0;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-top: 25px solid #ff4444;
+      z-index: 10;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+    }
+    .pointer::after {
+      content: '';
+      position: absolute;
+      top: -25px;
+      left: -12px;
+      width: 24px;
+      height: 20px;
+      background: linear-gradient(to bottom, #ff6666, #ff4444);
+      border-radius: 50% 50% 0 0;
+    }
+    @keyframes glow {
+      from { 
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        opacity: 0.8;
+      }
+      to { 
+        box-shadow: 0 0 25px rgba(255, 255, 255, 0.6);
+        opacity: 1;
+      }
     }
     @keyframes spinGlow {
       from { 
@@ -149,7 +185,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>🎡 SpinLive - Ruleta Interactiva</h1>
+    <h1>� LuckyWheel - Tira de Premios</h1>
     
     <div class="wheel-selector">
       <label>Seleccionar Ruleta:</label>
@@ -157,7 +193,8 @@
     </div>
     
     <div class="wheel-container">
-      <canvas id="wheel" width="400" height="400"></canvas>
+      <canvas id="wheel" width="600" height="120"></canvas>
+      <div class="pointer"></div>
     </div>
     <br>
     <button id="spin-btn" onclick="spinWheel()" disabled>🎯 Girar Ruleta</button>
@@ -179,11 +216,12 @@
     
     let segments = [];
     let currentWheelId = null;
-    let angle = 0;
+    let position = 0; // Posición horizontal de la tira
     let spinning = false;
     let socket;
     let lastSpinSource = null; // Track the source of the last spin
     let lastSpinWheelId = null; // Track the wheel ID of the last spin
+    let segmentWidth = 120; // Ancho de cada segmento
     
     // Conectar WebSocket
     function initSocket() {
@@ -342,111 +380,88 @@
     }
     
     function drawWheel() {
-      ctx.clearRect(0, 0, 400, 400);
-      drawWheelSegments();
-      drawPointer();
+      ctx.clearRect(0, 0, 600, 120);
+      drawStrip();
     }
     
-    function drawWheelSegments() {
-      const centerX = 200;
-      const centerY = 200;
-      const radius = 150;
-      
-      // Dibujar borde exterior decorativo
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 8, 0, 2 * Math.PI);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 4;
-      ctx.stroke();
-      
-      // Dibujar borde interior
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 2, 0, 2 * Math.PI);
-      ctx.strokeStyle = '#ddd';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+    function drawStrip() {
+      const canvasWidth = 600;
+      const canvasHeight = 120;
       
       if (segments.length === 0) {
-        // Dibujar ruleta vacía
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        // Dibujar tira vacía
+        ctx.fillStyle = '#f9f9f9';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
         ctx.strokeStyle = '#ccc';
         ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = '#f9f9f9';
-        ctx.fill();
+        ctx.strokeRect(0, 0, canvasWidth, canvasHeight);
         ctx.fillStyle = '#666';
         ctx.font = '16px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Ruleta vacía', centerX, centerY);
+        ctx.fillText('Ruleta vacía', canvasWidth / 2, canvasHeight / 2);
         return;
       }
       
-      let startAngle = 0;
+      // Crear una tira extendida para efecto infinito
+      const totalSegments = segments.length;
+      const stripWidth = segmentWidth * totalSegments;
+      const repetitions = Math.ceil(canvasWidth / stripWidth) + 2;
       
-      // Calcular total de probabilidades
-      const totalProbability = segments.reduce((sum, seg) => sum + seg.probability, 0);
+      // Calcular offset basado en la posición actual
+      const offset = position % stripWidth;
       
-      segments.forEach((segment, index) => {
-        // Calcular ángulo del segmento basado en probabilidad relativa
-        const sliceAngle = (segment.probability / totalProbability) * 2 * Math.PI;
+      for (let rep = 0; rep < repetitions; rep++) {
+        const baseX = (rep * stripWidth) - offset;
         
-        // Dibujar segmento con gradiente
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
-        ctx.closePath();
-        
-        // Crear gradiente radial para cada segmento
-        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
-        gradient.addColorStop(0, segment.color);
-        gradient.addColorStop(0.7, segment.color);
-        gradient.addColorStop(1, shadeColor(segment.color, -20));
-        
-        ctx.fillStyle = gradient;
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Dibujar texto con mejor contraste
-        const labelAngle = startAngle + sliceAngle / 2;
-        const labelRadius = radius * 0.7;
-        const labelX = centerX + Math.cos(labelAngle) * labelRadius;
-        const labelY = centerY + Math.sin(labelAngle) * labelRadius;
-        
-        ctx.save();
-        ctx.translate(labelX, labelY);
-        ctx.rotate(labelAngle + Math.PI / 2);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        // Agregar sombra al texto
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 4;
-        ctx.strokeText(segment.label, 0, 0);
-        ctx.fillText(segment.label, 0, 0);
-        ctx.restore();
-        
-        startAngle += sliceAngle;
-      });
+        segments.forEach((segment, index) => {
+          const x = baseX + (index * segmentWidth);
+          
+          // Solo dibujar segmentos visibles
+          if (x + segmentWidth >= -segmentWidth && x <= canvasWidth + segmentWidth) {
+            // Crear gradiente vertical para cada segmento
+            const gradient = ctx.createLinearGradient(x, 0, x, canvasHeight);
+            gradient.addColorStop(0, lightenColor(segment.color, 20));
+            gradient.addColorStop(0.5, segment.color);
+            gradient.addColorStop(1, shadeColor(segment.color, -20));
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, 0, segmentWidth, canvasHeight);
+            
+            // Borde del segmento
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, 0, segmentWidth, canvasHeight);
+            
+            // Dibujar texto del premio
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Sombra del texto
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 4;
+            ctx.strokeText(segment.label, x + segmentWidth / 2, canvasHeight / 2);
+            ctx.fillText(segment.label, x + segmentWidth / 2, canvasHeight / 2);
+          }
+        });
+      }
       
-      // Dibujar centro de la ruleta
+      // Dibujar línea central de referencia más visible
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
-      ctx.fillStyle = '#333';
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
+      ctx.moveTo(canvasWidth / 2, 0);
+      ctx.lineTo(canvasWidth / 2, canvasHeight);
       ctx.stroke();
       
-      // Texto en el centro
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 12px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('SPIN', centerX, centerY + 4);
+      // Agregar sombra a la línea central
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(canvasWidth / 2 - 1, 0);
+      ctx.lineTo(canvasWidth / 2 - 1, canvasHeight);
+      ctx.stroke();
     }
     
     // Función auxiliar para oscurecer colores
@@ -461,49 +476,17 @@
         (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
     }
     
-    function drawPointer() {
-      const centerX = 200;
-      const centerY = 200;
-      const radius = 150;
-      
-      // Dibujar sombra del puntero
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetX = 3;
-      ctx.shadowOffsetY = 3;
-      
-      // Dibujar puntero principal
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY - radius - 20);
-      ctx.lineTo(centerX - 15, centerY - radius + 8);
-      ctx.lineTo(centerX + 15, centerY - radius + 8);
-      ctx.closePath();
-      
-      // Gradiente para el puntero
-      const gradient = ctx.createLinearGradient(centerX, centerY - radius - 20, centerX, centerY - radius + 8);
-      gradient.addColorStop(0, '#ff4444');
-      gradient.addColorStop(1, '#cc0000');
-      
-      ctx.fillStyle = gradient;
-      ctx.fill();
-      
-      // Borde del puntero
-      ctx.strokeStyle = '#880000';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      
-      ctx.restore();
-      
-      // Dibujar indicador luminoso en la punta
-      ctx.beginPath();
-      ctx.arc(centerX, centerY - radius - 18, 3, 0, 2 * Math.PI);
-      ctx.fillStyle = '#ffff00';
-      ctx.shadowColor = '#ffff00';
-      ctx.shadowBlur = 10;
-      ctx.fill();
-      ctx.shadowColor = 'transparent';
+    // Función auxiliar para aclarar colores
+    function lightenColor(color, percent) {
+      const num = parseInt(color.replace("#", ""), 16);
+      const amt = Math.round(2.55 * percent);
+      const R = Math.min(255, (num >> 16) + amt);
+      const G = Math.min(255, (num >> 8 & 0x00FF) + amt);
+      const B = Math.min(255, (num & 0x0000FF) + amt);
+      return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
     }
+    
+
     
     function spinWheel() {
       if (spinning || segments.length === 0) return;
@@ -531,28 +514,60 @@
     }
     
     function animateSpin(result) {
-      const spinAngle = Math.random() * 360 + 720; // Múltiples vueltas
+      // Encontrar el índice del segmento ganador
+      const winnerIndex = segments.findIndex(seg => seg.label === result);
+      if (winnerIndex === -1) return;
+      
+      const canvasWidth = 600;
+      const canvasCenter = canvasWidth / 2; // Centro del canvas (300px)
+      const stripWidth = segmentWidth * segments.length;
+      
+      // Agregar múltiples vueltas completas para el efecto
+      const extraSpins = 4; // 4 vueltas completas
+      const extraDistance = stripWidth * extraSpins;
+      
+      // Calcular la posición final: queremos que el CENTRO del segmento ganador esté en el centro del canvas
+      // La posición del centro del segmento ganador en la tira es: winnerIndex * segmentWidth + segmentWidth/2
+      const segmentCenterInStrip = winnerIndex * segmentWidth + (segmentWidth / 2);
+      
+      // Para centrar este punto en el canvas, la posición debe ser:
+      // position = segmentCenterInStrip - canvasCenter
+      const targetPosition = segmentCenterInStrip - canvasCenter;
+      
+      // Posición final con las vueltas extra
+      const finalPosition = position + extraDistance + (targetPosition - (position % stripWidth));
+      
       const duration = 4000; // 4 segundos
       const startTime = Date.now();
+      const startPosition = position;
       
       const animate = () => {
         const elapsed = Date.now() - startTime;
         const progress = elapsed / duration;
         
         if (progress < 1) {
-          angle = spinAngle * easeOut(progress);
-          drawWheelRotated();
+          const easedProgress = easeOut(progress);
+          position = startPosition + (finalPosition - startPosition) * easedProgress;
+          drawWheel();
           requestAnimationFrame(animate);
         } else {
+          // Forzar la posición exacta final para asegurar centrado perfecto
+          position = targetPosition;
+          drawWheel();
+          
           spinning = false;
           document.getElementById('spin-btn').disabled = false;
           // Quitar efecto de brillo
           document.querySelector('.wheel-container').classList.remove('spinning');
+          
+          // Destacar el segmento ganador
+          highlightWinner(result);
+          
           // Solo mostrar resultado si no hay información de usuario (giro manual)
           const resultDiv = document.getElementById('result');
           if (!resultDiv.querySelector('.user-info')) {
             setTimeout(() => {
-              resultDiv.innerHTML = `<div class="prize-result">Resultado: ${result}</div>`;
+              resultDiv.innerHTML = `<div class="prize-result">🎉 ¡Ganaste: ${result}!</div>`;
             }, 500);
           }
         }
@@ -560,17 +575,78 @@
       animate();
     }
     
-    function drawWheelRotated() {
-      ctx.clearRect(0, 0, 400, 400);
-      ctx.save();
-      ctx.translate(200, 200);
-      ctx.rotate((angle * Math.PI) / 180);
-      ctx.translate(-200, -200);
-      drawWheelSegments(); // Dibujar solo los segmentos (sin puntero)
-      ctx.restore();
-      
-      // Dibujar puntero fijo después de restaurar el contexto
-      drawPointer();
+    function highlightWinner(result) {
+      // Efecto de destello en el segmento ganador
+      let flashCount = 0;
+      const flashInterval = setInterval(() => {
+        const winnerIndex = segments.findIndex(seg => seg.label === result);
+        if (winnerIndex !== -1) {
+          // Dibujar la tira normalmente
+          drawWheel();
+          
+          // Agregar overlay brillante en el segmento ganador centrado
+          if (flashCount % 2 === 0) {
+            const canvasWidth = 600;
+            const canvasHeight = 120;
+            const canvasCenter = canvasWidth / 2;
+            const stripWidth = segmentWidth * segments.length;
+            const offset = position % stripWidth;
+            
+            // Calcular la posición X del segmento ganador centrado
+            // Buscar el segmento ganador que esté más cerca del centro
+            const baseX = -offset;
+            const segmentX = baseX + (winnerIndex * segmentWidth);
+            
+            // Si el segmento está fuera del canvas, ajustar con repeticiones
+            let centeredX = segmentX;
+            while (centeredX + segmentWidth < 0) {
+              centeredX += stripWidth;
+            }
+            while (centeredX > canvasWidth) {
+              centeredX -= stripWidth;
+            }
+            
+            // Dibujar el overlay dorado
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+            ctx.fillRect(centeredX, 0, segmentWidth, canvasHeight);
+            
+            // Agregar borde brillante
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(centeredX, 0, segmentWidth, canvasHeight);
+            
+            // Agregar efecto de brillo interno
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillRect(centeredX + 5, 5, segmentWidth - 10, canvasHeight - 10);
+          }
+        }
+        
+        flashCount++;
+        if (flashCount >= 10) { // Más flashes para mejor efecto
+          clearInterval(flashInterval);
+          drawWheel(); // Dibujar estado final
+          
+          // Agregar un borde permanente al ganador
+          const winnerIndex = segments.findIndex(seg => seg.label === result);
+          if (winnerIndex !== -1) {
+            const offset = position % (segmentWidth * segments.length);
+            const baseX = -offset;
+            let centeredX = baseX + (winnerIndex * segmentWidth);
+            const stripWidth = segmentWidth * segments.length;
+            
+            while (centeredX + segmentWidth < 0) {
+              centeredX += stripWidth;
+            }
+            while (centeredX > 600) {
+              centeredX -= stripWidth;
+            }
+            
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.7)';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(centeredX, 0, segmentWidth, 120);
+          }
+        }
+      }, 120); // Más rápido para mejor efecto
     }
     
     function easeOut(t) {
