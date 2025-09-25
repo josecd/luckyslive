@@ -26,11 +26,41 @@
       margin-bottom: 30px; 
       text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
+    .wheel-container {
+      position: relative;
+      display: inline-block;
+      margin: 20px 0;
+    }
+    .wheel-container::before {
+      content: '';
+      position: absolute;
+      top: -12px;
+      left: -12px;
+      right: -12px;
+      bottom: -12px;
+      border-radius: 50%;
+      background: linear-gradient(45deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1));
+      z-index: -1;
+      animation: glow 3s ease-in-out infinite alternate;
+    }
     canvas { 
-      border: 3px solid #fff; 
+      border: 4px solid #fff; 
       border-radius: 50%; 
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-      background: white;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 8px rgba(255,255,255,0.1);
+      background: radial-gradient(circle at center, #fff 0%, #f0f0f0 100%);
+    }
+    .wheel-container.spinning::before {
+      animation: spinGlow 0.5s ease-in-out infinite alternate;
+    }
+    @keyframes spinGlow {
+      from { 
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.3);
+        opacity: 0.6;
+      }
+      to { 
+        box-shadow: 0 0 40px rgba(255, 215, 0, 0.8), 0 0 80px rgba(255, 215, 0, 0.5);
+        opacity: 1;
+      }
     }
     button { 
       margin: 20px; 
@@ -126,7 +156,9 @@
       <select id="wheel-select" onchange="loadWheel()"></select>
     </div>
     
-    <canvas id="wheel" width="400" height="400"></canvas>
+    <div class="wheel-container">
+      <canvas id="wheel" width="400" height="400"></canvas>
+    </div>
     <br>
     <button id="spin-btn" onclick="spinWheel()" disabled>🎯 Girar Ruleta</button>
     <button id="clear-btn" onclick="clearResult()" style="background: #666; margin-left: 10px;">🗑️ Limpiar</button>
@@ -150,6 +182,8 @@
     let angle = 0;
     let spinning = false;
     let socket;
+    let lastSpinSource = null; // Track the source of the last spin
+    let lastSpinWheelId = null; // Track the wheel ID of the last spin
     
     // Conectar WebSocket
     function initSocket() {
@@ -168,6 +202,10 @@
       socket.on('spinResult', (data) => {
         console.log('Spin result received:', data);
         
+        // Track the source and wheel ID of this spin
+        lastSpinSource = data.source;
+        lastSpinWheelId = data.wheelId;
+        
         // Mostrar información del usuario si viene de TikTok
         let resultHTML = `<div class="prize-result">Resultado: ${data.result}</div>`;
         if (data.source === 'tiktok' && data.userId) {
@@ -181,7 +219,13 @@
         
         document.getElementById('result').innerHTML = resultHTML;
         animateSpin(data.result);
-        loadSpinHistory();
+        
+        // Para giros de TikTok, siempre mostrar historial de la ruleta 20
+        if (data.source === 'tiktok') {
+          loadSpinHistoryForWheel(20);
+        } else {
+          loadSpinHistory();
+        }
       });
     }
     
@@ -247,11 +291,27 @@
     
     // Cargar historial de giros
     async function loadSpinHistory() {
-      if (!currentWheelId) return;
-      
+      // Si hay un último giro, mostrar el historial de esa ruleta
+      // Si el último giro fue de TikTok, siempre mostrar historial de la ruleta 20
+      // Para giros manuales, usar la ruleta del último giro
+      let historyWheelId;
+      if (lastSpinWheelId) {
+        historyWheelId = lastSpinWheelId;
+      } else if (lastSpinSource === 'tiktok') {
+        historyWheelId = 20;
+      } else {
+        historyWheelId = currentWheelId || 20;
+      }
+      await loadSpinHistoryForWheel(historyWheelId);
+    }
+    
+    // Cargar historial de giros para una ruleta específica
+    async function loadSpinHistoryForWheel(wheelId) {
       try {
-        const response = await fetch(`${API_BASE}/wheels/${currentWheelId}/spins`);
+        console.log('Loading spin history for wheel:', wheelId);
+        const response = await fetch(`${API_BASE}/wheels/${wheelId}/spins`);
         const spins = await response.json();
+        console.log('Spins loaded:', spins.length, 'spins');
         
         const historyDiv = document.getElementById('spin-history');
         historyDiv.innerHTML = '';
@@ -261,7 +321,7 @@
           return;
         }
         
-        spins.slice(-5).reverse().forEach(spin => {
+        spins.slice(0, 5).forEach(spin => {
           const spinDiv = document.createElement('div');
           spinDiv.className = 'spin-item';
           
@@ -283,11 +343,33 @@
     
     function drawWheel() {
       ctx.clearRect(0, 0, 400, 400);
+      drawWheelSegments();
+      drawPointer();
+    }
+    
+    function drawWheelSegments() {
+      const centerX = 200;
+      const centerY = 200;
+      const radius = 150;
+      
+      // Dibujar borde exterior decorativo
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius + 8, 0, 2 * Math.PI);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      
+      // Dibujar borde interior
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius + 2, 0, 2 * Math.PI);
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 2;
+      ctx.stroke();
       
       if (segments.length === 0) {
         // Dibujar ruleta vacía
         ctx.beginPath();
-        ctx.arc(200, 200, 150, 0, 2 * Math.PI);
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
         ctx.strokeStyle = '#ccc';
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -296,13 +378,10 @@
         ctx.fillStyle = '#666';
         ctx.font = '16px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Ruleta vacía', 200, 200);
+        ctx.fillText('Ruleta vacía', centerX, centerY);
         return;
       }
       
-      const centerX = 200;
-      const centerY = 200;
-      const radius = 150;
       let startAngle = 0;
       
       // Calcular total de probabilidades
@@ -312,18 +391,25 @@
         // Calcular ángulo del segmento basado en probabilidad relativa
         const sliceAngle = (segment.probability / totalProbability) * 2 * Math.PI;
         
-        // Dibujar segmento
+        // Dibujar segmento con gradiente
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
         ctx.closePath();
-        ctx.fillStyle = segment.color;
+        
+        // Crear gradiente radial para cada segmento
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+        gradient.addColorStop(0, segment.color);
+        gradient.addColorStop(0.7, segment.color);
+        gradient.addColorStop(1, shadeColor(segment.color, -20));
+        
+        ctx.fillStyle = gradient;
         ctx.fill();
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Dibujar texto
+        // Dibujar texto con mejor contraste
         const labelAngle = startAngle + sliceAngle / 2;
         const labelRadius = radius * 0.7;
         const labelX = centerX + Math.cos(labelAngle) * labelRadius;
@@ -336,8 +422,10 @@
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        
+        // Agregar sombra al texto
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 4;
         ctx.strokeText(segment.label, 0, 0);
         ctx.fillText(segment.label, 0, 0);
         ctx.restore();
@@ -345,14 +433,76 @@
         startAngle += sliceAngle;
       });
       
-      // Dibujar puntero
+      // Dibujar centro de la ruleta
       ctx.beginPath();
-      ctx.moveTo(centerX, centerY - radius - 10);
-      ctx.lineTo(centerX - 10, centerY - radius + 10);
-      ctx.lineTo(centerX + 10, centerY - radius + 10);
-      ctx.closePath();
-      ctx.fillStyle = '#ff0000';
+      ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
+      ctx.fillStyle = '#333';
       ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Texto en el centro
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('SPIN', centerX, centerY + 4);
+    }
+    
+    // Función auxiliar para oscurecer colores
+    function shadeColor(color, percent) {
+      const num = parseInt(color.replace("#", ""), 16);
+      const amt = Math.round(2.55 * percent);
+      const R = (num >> 16) + amt;
+      const G = (num >> 8 & 0x00FF) + amt;
+      const B = (num & 0x0000FF) + amt;
+      return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+        (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+    }
+    
+    function drawPointer() {
+      const centerX = 200;
+      const centerY = 200;
+      const radius = 150;
+      
+      // Dibujar sombra del puntero
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
+      
+      // Dibujar puntero principal
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY - radius - 20);
+      ctx.lineTo(centerX - 15, centerY - radius + 8);
+      ctx.lineTo(centerX + 15, centerY - radius + 8);
+      ctx.closePath();
+      
+      // Gradiente para el puntero
+      const gradient = ctx.createLinearGradient(centerX, centerY - radius - 20, centerX, centerY - radius + 8);
+      gradient.addColorStop(0, '#ff4444');
+      gradient.addColorStop(1, '#cc0000');
+      
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      
+      // Borde del puntero
+      ctx.strokeStyle = '#880000';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      ctx.restore();
+      
+      // Dibujar indicador luminoso en la punta
+      ctx.beginPath();
+      ctx.arc(centerX, centerY - radius - 18, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffff00';
+      ctx.shadowColor = '#ffff00';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
     }
     
     function spinWheel() {
@@ -361,6 +511,9 @@
       spinning = true;
       document.getElementById('spin-btn').disabled = true;
       document.getElementById('result').textContent = '🎡 Girando...';
+      
+      // Agregar efecto de brillo durante el giro
+      document.querySelector('.wheel-container').classList.add('spinning');
       
       fetch(`${API_BASE}/wheels/${currentWheelId}/spin`, { method: 'POST' })
         .then(response => response.json())
@@ -373,6 +526,7 @@
           document.getElementById('result').textContent = '❌ Error al girar';
           spinning = false;
           document.getElementById('spin-btn').disabled = false;
+          document.querySelector('.wheel-container').classList.remove('spinning');
         });
     }
     
@@ -392,6 +546,8 @@
         } else {
           spinning = false;
           document.getElementById('spin-btn').disabled = false;
+          // Quitar efecto de brillo
+          document.querySelector('.wheel-container').classList.remove('spinning');
           // Solo mostrar resultado si no hay información de usuario (giro manual)
           const resultDiv = document.getElementById('result');
           if (!resultDiv.querySelector('.user-info')) {
@@ -410,8 +566,11 @@
       ctx.translate(200, 200);
       ctx.rotate((angle * Math.PI) / 180);
       ctx.translate(-200, -200);
-      drawWheel();
+      drawWheelSegments(); // Dibujar solo los segmentos (sin puntero)
       ctx.restore();
+      
+      // Dibujar puntero fijo después de restaurar el contexto
+      drawPointer();
     }
     
     function easeOut(t) {
