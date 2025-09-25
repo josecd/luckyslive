@@ -27,6 +27,11 @@ export class WheelController {
     return this.wheelService.addSegment(+id, body.label, body.color, body.probability);
   }
 
+  @Get(':id/spins')
+  async getSpins(@Param('id') id: string) {
+    return this.wheelService.getWheelSpins(+id);
+  }
+
   @Get(':id')
   async get(@Param('id') id: string) {
     return this.wheelService.getWheel(+id);
@@ -54,25 +59,37 @@ export class WheelController {
       wheelId: +id, 
       result, 
       wheelName: wheel.name,
-      timestamp: new Date() 
+      timestamp: new Date(),
+      source: 'manual'
     });
     
     return { result };
   }
 
   @Post('trigger-spin')
-  async triggerSpin() {
-    const wheel = await this.wheelService.getWheel(1);
-    if (!wheel) throw new Error('Wheel not found');
-    const result = this.wheelService.spinWheel(wheel.segments);
-    await this.wheelService.recordSpin(1, result);
+  async triggerSpin(@Body() body: { userId?: string; triggerType?: string }) {
+    // Usar la Ruleta de Premios (ID 20) si existe y tiene segmentos
+    let wheel = await this.wheelService.getWheel(20);
     
-    // Emitir evento por WebSocket
+    // Si no existe o no tiene segmentos, usar cualquier ruleta disponible
+    if (!wheel || !wheel.segments || wheel.segments.length === 0) {
+      const wheels = await this.wheelService.getAllWheels();
+      wheel = wheels.find(w => w.segments && w.segments.length > 0);
+    }
+    
+    if (!wheel) throw new Error('No wheel available');
+    const result = this.wheelService.spinWheel(wheel.segments);
+    await this.wheelService.recordSpin(wheel.id, result, body.userId, body.triggerType);
+    
+    // Emitir evento por WebSocket con información del usuario
     this.eventsGateway.emitSpinResult({ 
-      wheelId: 1, 
+      wheelId: wheel.id, 
       result, 
       wheelName: wheel.name,
-      timestamp: new Date() 
+      timestamp: new Date(),
+      source: 'tiktok',
+      userId: body.userId,
+      triggerType: body.triggerType
     });
     
     return { result };

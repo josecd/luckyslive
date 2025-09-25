@@ -230,6 +230,7 @@
                     <input type="text" id="gift-trigger" value="Rose">
                 </div>
                 <button class="btn" onclick="saveSettings()">Guardar Configuración</button>
+                <button class="btn" onclick="reconnectTikTok()" style="background: #ff9800; margin-left: 10px;">Reconectar TikTok</button>
             </div>
         </div>
     </div>
@@ -669,19 +670,30 @@
             .then(response => response.json())
             .then(data => {
                 console.log('Configuración guardada en backend:', data);
-                // Reconectar TikTok con nueva configuración
-                return fetch('http://localhost:3001/tiktok/reconnect', {
-                    method: 'POST'
-                });
+                alert('Configuración guardada exitosamente. Haz clic en "Reconectar TikTok" para aplicar los cambios.');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al guardar la configuración. Inténtalo de nuevo.');
+            });
+        }
+
+        function reconnectTikTok() {
+            fetch('http://localhost:3001/tiktok/reconnect', {
+                method: 'POST'
             })
             .then(response => response.json())
             .then(data => {
                 console.log('Reconexión TikTok:', data);
-                alert('Configuración guardada y servidor reconectado. Los cambios están activos.');
+                if (data.message.includes('Error')) {
+                    alert('Error al reconectar: ' + data.message);
+                } else {
+                    alert('Reconexión exitosa: ' + data.message);
+                }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Configuración guardada localmente, pero hubo un error al actualizar el servidor. Reinicia manualmente si es necesario.');
+                alert('Error al reconectar con TikTok. Verifica la consola para más detalles.');
             });
         }
 

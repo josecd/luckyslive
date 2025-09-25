@@ -66,9 +66,22 @@ export class WheelService {
     return segments[segments.length - 1].label;
   }
 
-  async recordSpin(wheelId: number, result: string) {
+  async recordSpin(wheelId: number, result: string, userId?: string, triggerType?: string) {
     return this.prisma.spin.create({
-      data: { wheelId, result },
+      data: { 
+        wheelId, 
+        result,
+        userId,
+        triggerType
+      },
+    });
+  }
+
+  async getWheelSpins(wheelId: number) {
+    return this.prisma.spin.findMany({
+      where: { wheelId },
+      orderBy: { timestamp: 'desc' },
+      take: 10, // Limitar a los últimos 10 giros
     });
   }
 

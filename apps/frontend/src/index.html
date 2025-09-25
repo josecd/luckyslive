@@ -54,12 +54,37 @@
       cursor: not-allowed;
       transform: none;
     }
+    #clear-btn {
+      background: #666;
+      margin-left: 10px;
+    }
+    #clear-btn:hover {
+      background: #555;
+    }
     #result { 
-      font-size: 24px; 
+      font-size: 20px; 
       font-weight: bold; 
       margin: 20px 0;
-      min-height: 30px;
+      min-height: 50px;
       text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+      line-height: 1.4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .user-info {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 10px 20px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+      font-size: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+    .prize-result {
+      font-size: 24px;
+      color: #ffeb3b;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
     }
     .wheel-selector {
       margin-bottom: 20px;
@@ -104,6 +129,7 @@
     <canvas id="wheel" width="400" height="400"></canvas>
     <br>
     <button id="spin-btn" onclick="spinWheel()" disabled>🎯 Girar Ruleta</button>
+    <button id="clear-btn" onclick="clearResult()" style="background: #666; margin-left: 10px;">🗑️ Limpiar</button>
     <div id="result"></div>
     
     <div class="status">
@@ -141,7 +167,19 @@
       
       socket.on('spinResult', (data) => {
         console.log('Spin result received:', data);
-        document.getElementById('result').textContent = `🎉 ¡Ganaste: ${data.result}!`;
+        
+        // Mostrar información del usuario si viene de TikTok
+        let resultHTML = `<div class="prize-result">Resultado: ${data.result}</div>`;
+        if (data.source === 'tiktok' && data.userId) {
+          const triggerIcon = data.triggerType === 'gift' ? '🎁' : '💬';
+          const triggerText = data.triggerType === 'gift' ? 'envió un regalo' : 'escribió el comando';
+          resultHTML = `
+            <div class="user-info">${triggerIcon} @${data.userId} ${triggerText}</div>
+            <div class="prize-result">🎉 ¡Ganaste: ${data.result}!</div>
+          `;
+        }
+        
+        document.getElementById('result').innerHTML = resultHTML;
         animateSpin(data.result);
         loadSpinHistory();
       });
@@ -226,7 +264,16 @@
         spins.slice(-5).reverse().forEach(spin => {
           const spinDiv = document.createElement('div');
           spinDiv.className = 'spin-item';
-          spinDiv.textContent = `${spin.result} - ${new Date(spin.createdAt).toLocaleTimeString()}`;
+          
+          // Si hay información del usuario, mostrarla
+          let spinText = `${spin.result}`;
+          if (spin.userId) {
+            const triggerIcon = spin.triggerType === 'gift' ? '🎁' : '💬';
+            spinText = `${triggerIcon} @${spin.userId} → ${spin.result}`;
+          }
+          
+          spinText += ` - ${new Date(spin.timestamp).toLocaleTimeString()}`;
+          spinDiv.textContent = spinText;
           historyDiv.appendChild(spinDiv);
         });
       } catch (error) {
@@ -345,10 +392,13 @@
         } else {
           spinning = false;
           document.getElementById('spin-btn').disabled = false;
-          // Asegurar que el resultado esté visible
-          setTimeout(() => {
-            document.getElementById('result').textContent = `🎉 ¡Ganaste: ${result}!`;
-          }, 500);
+          // Solo mostrar resultado si no hay información de usuario (giro manual)
+          const resultDiv = document.getElementById('result');
+          if (!resultDiv.querySelector('.user-info')) {
+            setTimeout(() => {
+              resultDiv.innerHTML = `<div class="prize-result">Resultado: ${result}</div>`;
+            }, 500);
+          }
         }
       };
       animate();
@@ -366,6 +416,10 @@
     
     function easeOut(t) {
       return 1 - Math.pow(1 - t, 3);
+    }
+    
+    function clearResult() {
+      document.getElementById('result').innerHTML = '';
     }
     
     // Inicializar

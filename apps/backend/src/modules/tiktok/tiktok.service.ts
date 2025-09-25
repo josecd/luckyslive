@@ -27,45 +27,58 @@ export class TikTokService {
     }
 
     this.isConnecting = true;
-    this.tiktokConnection = new WebcastPushConnection(this.config.username);
+    
+    try {
+      this.tiktokConnection = new WebcastPushConnection(this.config.username);
 
-    this.tiktokConnection.connect().then(() => {
+      await this.tiktokConnection.connect();
       console.log(`Connected to TikTok Live for user: ${this.config.username}`);
       this.isConnecting = false;
-    }).catch((err: any) => {
+    } catch (err: any) {
       console.error('Failed to connect to TikTok Live', err);
       this.isConnecting = false;
-    });
+      
+      // Manejar errores específicos
+      if (err.message && err.message.includes('user_not_found')) {
+        throw new Error(`TikTok user "${this.config.username}" not found. Please check the username and ensure the user exists and is currently live streaming.`);
+      } else if (err.message && err.message.includes('room_id')) {
+        throw new Error(`Unable to find live stream for user "${this.config.username}". Make sure the user is currently live streaming.`);
+      } else {
+        throw new Error(`Failed to connect to TikTok: ${err.message}`);
+      }
+    }
 
     this.tiktokConnection.on('chat', async (data: any) => {
       console.log(`Chat: ${data.comment}`);
       if (data.comment === this.config.spinCommand) {
-        console.log(`🎯 Spin command detected: ${data.comment}`);
-        await this.triggerSpin();
+        console.log(`🎯 Spin command detected: ${data.comment} from ${data.uniqueId}`);
+        await this.triggerSpin(data.uniqueId, 'chat');
       }
     });
 
     this.tiktokConnection.on('gift', async (data: any) => {
       console.log(`Gift: ${data.giftName}`);
       if (data.giftName === this.config.giftTrigger) {
-        console.log(`🎁 Gift trigger detected: ${data.giftName}`);
-        await this.triggerSpin();
+        console.log(`🎁 Gift trigger detected: ${data.giftName} from ${data.uniqueId}`);
+        await this.triggerSpin(data.uniqueId, 'gift');
       }
     });
   }
 
-  private async triggerSpin() {
+  private async triggerSpin(userId: string, triggerType: 'chat' | 'gift') {
     try {
-      // Intentar primero con la ruleta ID 1, si no existe usar la primera disponible
-      let wheel = await this.wheelService.getWheel(1);
-      if (!wheel || wheel.segments.length === 0) {
+      // Usar la Ruleta de Premios (ID 20) si existe y tiene segmentos
+      let wheel = await this.wheelService.getWheel(20);
+      
+      // Si no existe o no tiene segmentos, usar cualquier ruleta disponible
+      if (!wheel || !wheel.segments || wheel.segments.length === 0) {
         const wheels = await this.wheelService.getAllWheels();
         wheel = wheels.find(w => w.segments && w.segments.length > 0);
       }
       
-      if (wheel && wheel.segments.length > 0) {
+      if (wheel && wheel.segments && wheel.segments.length > 0) {
         const result = this.wheelService.spinWheel(wheel.segments);
-        await this.wheelService.recordSpin(wheel.id, result);
+        await this.wheelService.recordSpin(wheel.id, result, userId, triggerType);
         
         // Emitir evento completo por WebSocket
         this.eventsGateway.emitSpinResult({ 
@@ -73,10 +86,12 @@ export class TikTokService {
           result, 
           wheelName: wheel.name,
           timestamp: new Date(),
-          source: 'tiktok' // Indicar que viene de TikTok
+          source: 'tiktok',
+          userId: userId,
+          triggerType: triggerType // 'chat' o 'gift'
         });
         
-        console.log(`Spin result from TikTok: ${result} (Wheel: ${wheel.name})`);
+        console.log(`Spin result from TikTok: ${result} (Wheel: ${wheel.name}, User: ${userId}, Trigger: ${triggerType})`);
       } else {
         console.log('No wheel found or wheel has no segments');
       }
@@ -103,8 +118,13 @@ export class TikTokService {
 
     // Solo conectar si hay un username válido configurado
     if (this.config.username && this.config.username !== 'testuser' && this.config.username.trim() !== '') {
-      await this.initializeTikTokConnection();
-      return { message: 'Reconnecting to TikTok...' };
+      try {
+        await this.initializeTikTokConnection();
+        return { message: 'Reconnecting to TikTok...' };
+      } catch (error) {
+        console.error('Error during reconnection:', error);
+        return { message: `Error connecting to TikTok: ${error.message}. Please check the username and try again.` };
+      }
     } else {
       return { message: 'No valid username configured. Please set a TikTok username in the admin panel.' };
     }
