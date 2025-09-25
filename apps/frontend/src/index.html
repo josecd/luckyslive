@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>SpinLive - Ruleta Interactiva</title>
+  <style>
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      text-align: center; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      color: white;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 30px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+    h1 { 
+      margin-bottom: 30px; 
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    canvas { 
+      border: 3px solid #fff; 
+      border-radius: 50%; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      background: white;
+    }
+    button { 
+      margin: 20px; 
+      padding: 15px 30px; 
+      font-size: 18px; 
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    button:hover {
+      background: #ff5252;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    #result { 
+      font-size: 24px; 
+      font-weight: bold; 
+      margin: 20px 0;
+      min-height: 30px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .wheel-selector {
+      margin-bottom: 20px;
+    }
+    .wheel-selector select {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(255, 255, 255, 0.9);
+      color: #333;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .spin-history {
+      margin-top: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .spin-item {
+      background: rgba(255, 255, 255, 0.1);
+      margin: 5px 0;
+      padding: 8px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎡 SpinLive - Ruleta Interactiva</h1>
+    
+    <div class="wheel-selector">
+      <label>Seleccionar Ruleta:</label>
+      <select id="wheel-select" onchange="loadWheel()"></select>
+    </div>
+    
+    <canvas id="wheel" width="400" height="400"></canvas>
+    <br>
+    <button id="spin-btn" onclick="spinWheel()" disabled>🎯 Girar Ruleta</button>
+    <div id="result"></div>
+    
+    <div class="status">
+      <div>Estado: <span id="status">Cargando...</span></div>
+      <div>Últimos giros:</div>
+      <div class="spin-history" id="spin-history"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const API_BASE = 'http://localhost:3001';
+    
+    let segments = [];
+    let currentWheelId = null;
+    let angle = 0;
+    let spinning = false;
+    let socket;
+    
+    // Conectar WebSocket
+    function initSocket() {
+      socket = io('http://localhost:3001');
+      
+      socket.on('connect', () => {
+        document.getElementById('status').textContent = '🟢 Conectado';
+        document.getElementById('status').style.color = '#4CAF50';
+      });
+      
+      socket.on('disconnect', () => {
+        document.getElementById('status').textContent = '🔴 Desconectado';
+        document.getElementById('status').style.color = '#f44336';
+      });
+      
+      socket.on('spinResult', (data) => {
+        console.log('Spin result received:', data);
+        document.getElementById('result').textContent = `🎉 ¡Ganaste: ${data.result}!`;
+        animateSpin(data.result);
+        loadSpinHistory();
+      });
+    }
+    
+    // Cargar lista de ruletas
+    async function loadWheels() {
+      try {
+        const response = await fetch(`${API_BASE}/wheels`);
+        const wheels = await response.json();
+        
+        const select = document.getElementById('wheel-select');
+        select.innerHTML = '<option value="">Seleccionar ruleta...</option>';
+        
+        wheels.forEach(wheel => {
+          const option = document.createElement('option');
+          option.value = wheel.id;
+          option.textContent = wheel.name;
+          select.appendChild(option);
+        });
+        
+        // Si hay ruletas, cargar la primera automáticamente
+        if (wheels.length > 0) {
+          select.value = wheels[0].id;
+          loadWheel();
+        }
+      } catch (error) {
+        console.error('Error loading wheels:', error);
+        document.getElementById('status').textContent = '❌ Error al cargar ruletas';
+      }
+    }
+    
+    // Cargar segmentos de una ruleta específica
+    async function loadWheel() {
+      const wheelId = document.getElementById('wheel-select').value;
+      if (!wheelId) {
+        segments = [];
+        document.getElementById('spin-btn').disabled = true;
+        drawWheel();
+        return;
+      }
+      
+      currentWheelId = wheelId;
+      
+      try {
+        const response = await fetch(`${API_BASE}/wheels/${wheelId}`);
+        const wheel = await response.json();
+        
+        segments = wheel.segments || [];
+        document.getElementById('spin-btn').disabled = segments.length === 0;
+        
+        if (segments.length === 0) {
+          document.getElementById('result').textContent = 'Esta ruleta no tiene segmentos. Agrega algunos desde el panel de administración.';
+        } else {
+          document.getElementById('result').textContent = `Ruleta "${wheel.name}" cargada con ${segments.length} premios`;
+        }
+        
+        drawWheel();
+        loadSpinHistory();
+      } catch (error) {
+        console.error('Error loading wheel:', error);
+        document.getElementById('result').textContent = 'Error al cargar la ruleta';
+      }
+    }
+    
+    // Cargar historial de giros
+    async function loadSpinHistory() {
+      if (!currentWheelId) return;
+      
+      try {
+        const response = await fetch(`${API_BASE}/wheels/${currentWheelId}/spins`);
+        const spins = await response.json();
+        
+        const historyDiv = document.getElementById('spin-history');
+        historyDiv.innerHTML = '';
+        
+        if (spins.length === 0) {
+          historyDiv.innerHTML = '<div class="spin-item">No hay giros aún</div>';
+          return;
+        }
+        
+        spins.slice(-5).reverse().forEach(spin => {
+          const spinDiv = document.createElement('div');
+          spinDiv.className = 'spin-item';
+          spinDiv.textContent = `${spin.result} - ${new Date(spin.createdAt).toLocaleTimeString()}`;
+          historyDiv.appendChild(spinDiv);
+        });
+      } catch (error) {
+        console.error('Error loading spin history:', error);
+      }
+    }
+    
+    function drawWheel() {
+      ctx.clearRect(0, 0, 400, 400);
+      
+      if (segments.length === 0) {
+        // Dibujar ruleta vacía
+        ctx.beginPath();
+        ctx.arc(200, 200, 150, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#f9f9f9';
+        ctx.fill();
+        ctx.fillStyle = '#666';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Ruleta vacía', 200, 200);
+        return;
+      }
+      
+      const centerX = 200;
+      const centerY = 200;
+      const radius = 150;
+      let startAngle = 0;
+      
+      // Calcular total de probabilidades
+      const totalProbability = segments.reduce((sum, seg) => sum + seg.probability, 0);
+      
+      segments.forEach((segment, index) => {
+        // Calcular ángulo del segmento basado en probabilidad relativa
+        const sliceAngle = (segment.probability / totalProbability) * 2 * Math.PI;
+        
+        // Dibujar segmento
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = segment.color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Dibujar texto
+        const labelAngle = startAngle + sliceAngle / 2;
+        const labelRadius = radius * 0.7;
+        const labelX = centerX + Math.cos(labelAngle) * labelRadius;
+        const labelY = centerY + Math.sin(labelAngle) * labelRadius;
+        
+        ctx.save();
+        ctx.translate(labelX, labelY);
+        ctx.rotate(labelAngle + Math.PI / 2);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(segment.label, 0, 0);
+        ctx.fillText(segment.label, 0, 0);
+        ctx.restore();
+        
+        startAngle += sliceAngle;
+      });
+      
+      // Dibujar puntero
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY - radius - 10);
+      ctx.lineTo(centerX - 10, centerY - radius + 10);
+      ctx.lineTo(centerX + 10, centerY - radius + 10);
+      ctx.closePath();
+      ctx.fillStyle = '#ff0000';
+      ctx.fill();
+    }
+    
+    function spinWheel() {
+      if (spinning || segments.length === 0) return;
+      
+      spinning = true;
+      document.getElementById('spin-btn').disabled = true;
+      document.getElementById('result').textContent = '🎡 Girando...';
+      
+      fetch(`${API_BASE}/wheels/${currentWheelId}/spin`, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Spin triggered:', data);
+          // La animación se hará cuando llegue el evento por WebSocket
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          document.getElementById('result').textContent = '❌ Error al girar';
+          spinning = false;
+          document.getElementById('spin-btn').disabled = false;
+        });
+    }
+    
+    function animateSpin(result) {
+      const spinAngle = Math.random() * 360 + 720; // Múltiples vueltas
+      const duration = 4000; // 4 segundos
+      const startTime = Date.now();
+      
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress < 1) {
+          angle = spinAngle * easeOut(progress);
+          drawWheelRotated();
+          requestAnimationFrame(animate);
+        } else {
+          spinning = false;
+          document.getElementById('spin-btn').disabled = false;
+          // Asegurar que el resultado esté visible
+          setTimeout(() => {
+            document.getElementById('result').textContent = `🎉 ¡Ganaste: ${result}!`;
+          }, 500);
+        }
+      };
+      animate();
+    }
+    
+    function drawWheelRotated() {
+      ctx.clearRect(0, 0, 400, 400);
+      ctx.save();
+      ctx.translate(200, 200);
+      ctx.rotate((angle * Math.PI) / 180);
+      ctx.translate(-200, -200);
+      drawWheel();
+      ctx.restore();
+    }
+    
+    function easeOut(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+    
+    // Inicializar
+    initSocket();
+    loadWheels();
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+// Prisma schema (alternative to TypeORM)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id       Int    @id @default(autoincrement())
+  username String @unique
+  password String
+  role     String // 'admin' or 'streamer'
+  wheels   Wheel[]
+}
+
+model Wheel {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+  segments    Segment[]
+  spins       Spin[]
+}
+
+model Segment {
+  id          Int     @id @default(autoincrement())
+  wheelId     Int
+  wheel       Wheel   @relation(fields: [wheelId], references: [id])
+  label       String
+  color       String
+  probability Float
+}
+
+model Spin {
+  id       Int      @id @default(autoincrement())
+  wheelId  Int
+  wheel    Wheel    @relation(fields: [wheelId], references: [id])
+  result   String
+  timestamp DateTime @default(now())
+  prizeId  Int?
+  prize    Prize?   @relation(fields: [prizeId], references: [id])
+}
+
+model Prize {
+  id     Int    @id @default(autoincrement())
+  name   String
+  value  String
+  spins  Spin[]
+}

@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpinLive Admin</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .nav {
+            background: #34495e;
+            padding: 15px;
+            display: flex;
+            gap: 20px;
+        }
+        .nav button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .nav button:hover {
+            background: #2980b9;
+        }
+        .nav button.active {
+            background: #e74c3c;
+        }
+        .content {
+            padding: 20px;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
+        }
+        .wheel-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .wheel-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        .wheel-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .btn:hover {
+            background: #229954;
+        }
+        .btn-danger {
+            background: #e74c3c;
+        }
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        .segments-list {
+            margin-top: 10px;
+        }
+        .segment-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid #eee;
+            margin-bottom: 5px;
+            border-radius: 4px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #3498db;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎡 SpinLive Admin Panel</h1>
+            <p>Gestión de ruletas y premios</p>
+        </div>
+
+        <div class="nav">
+            <button onclick="showSection('dashboard')">Dashboard</button>
+            <button onclick="showSection('wheels')" class="active">Ruletas</button>
+            <button onclick="showSection('segments')">Segmentos</button>
+            <button onclick="showSection('spins')">Historial de Giros</button>
+            <button onclick="showSection('settings')">Configuración</button>
+        </div>
+
+        <div class="content">
+            <!-- Dashboard -->
+            <div id="dashboard" class="section active">
+                <h2>Dashboard</h2>
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-wheels">0</div>
+                        <div class="stat-label">Ruletas Totales</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-spins">0</div>
+                        <div class="stat-label">Giros Totales</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="active-connections">0</div>
+                        <div class="stat-label">Conexiones Activas</div>
+                    </div>
+                </div>
+                <button class="btn" onclick="loadDashboard()">Actualizar Estadísticas</button>
+            </div>
+
+            <!-- Wheels Management -->
+            <div id="wheels" class="section active">
+                <h2>Gestión de Ruletas</h2>
+                <button class="btn" onclick="showCreateWheelForm()">Crear Nueva Ruleta</button>
+                <div id="wheels-list" class="wheel-list">
+                    <p>Cargando ruletas...</p>
+                </div>
+            </div>
+
+            <!-- Segments Management -->
+            <div id="segments" class="section">
+                <h2>Gestión de Segmentos</h2>
+                
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #3498db;">
+                    <h4 style="margin-top: 0; color: #2c3e50;">💡 Cómo funcionan las probabilidades:</h4>
+                    <ul style="margin: 0; padding-left: 20px; color: #555;">
+                        <li><strong>Probabilidad relativa:</strong> Se calcula como porcentaje del total de todos los segmentos</li>
+                        <li><strong>Valor del peso:</strong> Número que determina qué tan probable es ganar este premio</li>
+                        <li><strong>Ejemplo:</strong> Si tienes 3 segmentos con pesos 1.0, 2.0 y 1.0, las probabilidades serán 25%, 50% y 25%</li>
+                        <li><strong>Consejo:</strong> Usa valores simples como 1.0, 2.0, 0.5 para premios comunes, raros y muy raros</li>
+                    </ul>
+                </div>
+                
+                <div class="form-group">
+                    <label>Seleccionar Ruleta:</label>
+                    <select id="wheel-select" onchange="loadSegments()"></select>
+                </div>
+                <button class="btn" onclick="showCreateSegmentForm()">Agregar Segmento</button>
+                <div id="segments-list" class="segments-list"></div>
+            </div>
+
+            <!-- Spins History -->
+            <div id="spins" class="section">
+                <h2>Historial de Giros</h2>
+                <div id="spins-history"></div>
+            </div>
+
+            <!-- Settings -->
+            <div id="settings" class="section">
+                <h2>Configuración de TikTok</h2>
+                <div class="form-group">
+                    <label>Username de TikTok:</label>
+                    <input type="text" id="tiktok-username" placeholder="tu_usuario_tiktok">
+                </div>
+                <div class="form-group">
+                    <label>Comando de Chat para Girar:</label>
+                    <input type="text" id="spin-command" value="!spin">
+                </div>
+                <div class="form-group">
+                    <label>Regalo que activa giro:</label>
+                    <input type="text" id="gift-trigger" value="Rose">
+                </div>
+                <button class="btn" onclick="saveSettings()">Guardar Configuración</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for forms -->
+    <div id="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; width: 400px;">
+            <h3 id="modal-title">Crear Ruleta</h3>
+            <div id="modal-content"></div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-danger" onclick="closeModal()">Cancelar</button>
+                <button class="btn" id="modal-save-btn">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001';
+        let currentWheelId = null;
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+            event.target.classList.add('active');
+
+            switch(sectionId) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'wheels':
+                    loadWheels();
+                    break;
+                case 'segments':
+                    loadWheelSelect();
+                    break;
+                case 'spins':
+                    loadSpinsHistory();
+                    break;
+                case 'settings':
+                    loadSettings();
+                    break;
+            }
+        }
+
+        async function loadDashboard() {
+            try {
+                const [wheelsRes, spinsRes] = await Promise.all([
+                    fetch(`${API_BASE}/wheels`),
+                    fetch(`${API_BASE}/wheels/1/spins`)
+                ]);
+
+                const wheels = await wheelsRes.json();
+                const spins = await spinsRes.json();
+
+                document.getElementById('total-wheels').textContent = wheels.length;
+                document.getElementById('total-spins').textContent = spins.length;
+                document.getElementById('active-connections').textContent = 'N/A';
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        async function loadWheels() {
+            console.log('Loading wheels...');
+            try {
+                const response = await fetch(`${API_BASE}/wheels`);
+                console.log('Response status:', response.status);
+                const wheels = await response.json();
+                console.log('Wheels loaded:', wheels.length);
+
+                const wheelsList = document.getElementById('wheels-list');
+                wheelsList.innerHTML = '';
+
+                wheels.forEach(wheel => {
+                    const card = document.createElement('div');
+                    card.className = 'wheel-card';
+                    card.innerHTML = `
+                        <h3>${wheel.name}</h3>
+                        <p>${wheel.description || 'Sin descripción'}</p>
+                        <p>Segmentos: ${wheel.segments?.length || 0}</p>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button class="btn" onclick="editWheel(${wheel.id})" style="flex: 1;">Editar</button>
+                            <button class="btn" onclick="manageSegments(${wheel.id})" style="flex: 1; background: #27ae60;">Segmentos</button>
+                            <button class="btn btn-danger" onclick="deleteWheel(${wheel.id})" style="flex: 1;">Eliminar</button>
+                        </div>
+                    `;
+                    wheelsList.appendChild(card);
+                });
+                console.log('Wheels rendered successfully');
+                // Mostrar mensaje si no hay ruletas
+                if (wheels.length === 0) {
+                    wheelsList.innerHTML = '<p>No hay ruletas creadas aún. Crea tu primera ruleta.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading wheels:', error);
+            }
+        }
+
+        async function loadWheelSelect() {
+            try {
+                const response = await fetch(`${API_BASE}/wheels`);
+                const wheels = await response.json();
+
+                const select = document.getElementById('wheel-select');
+                select.innerHTML = '<option value="">Seleccionar ruleta...</option>';
+
+                wheels.forEach(wheel => {
+                    const option = document.createElement('option');
+                    option.value = wheel.id;
+                    option.textContent = wheel.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading wheel select:', error);
+            }
+        }
+
+        async function loadSegments() {
+            const wheelId = document.getElementById('wheel-select').value;
+            if (!wheelId) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/wheels/${wheelId}`);
+                const wheel = await response.json();
+
+                const segmentsList = document.getElementById('segments-list');
+                segmentsList.innerHTML = '';
+
+                wheel.segments.forEach(segment => {
+                    const item = document.createElement('div');
+                    item.className = 'segment-item';
+                    
+                    // Calcular probabilidad relativa
+                    const totalProbability = wheel.segments.reduce((sum, seg) => sum + seg.probability, 0);
+                    const relativeProbability = totalProbability > 0 ? (segment.probability / totalProbability) * 100 : 0;
+                    
+                    item.innerHTML = `
+                        <div style="flex: 1;">
+                            <strong style="color: ${segment.color};">⬜</strong> 
+                            <strong>${segment.label}</strong><br>
+                            <small style="color: #666;">
+                                Probabilidad: ${relativeProbability.toFixed(1)}% 
+                                (peso: ${segment.probability})
+                            </small>
+                        </div>
+                        <div>
+                            <button class="btn" onclick="editSegment(${segment.id}, ${wheel.id})" style="margin-right: 5px;">Editar</button>
+                            <button class="btn btn-danger" onclick="deleteSegment(${segment.id}, ${wheel.id})">Eliminar</button>
+                        </div>
+                    `;
+                    segmentsList.appendChild(item);
+                });
+                
+                // Mostrar resumen de probabilidades
+                if (wheel.segments.length > 0) {
+                    const totalWeight = wheel.segments.reduce((sum, seg) => sum + seg.probability, 0);
+                    const summary = document.createElement('div');
+                    summary.style.marginTop = '15px';
+                    summary.style.padding = '10px';
+                    summary.style.background = '#e8f4fd';
+                    summary.style.borderRadius = '4px';
+                    summary.innerHTML = `
+                        <strong>Resumen:</strong> ${wheel.segments.length} segmentos, 
+                        peso total: ${totalWeight.toFixed(1)}
+                    `;
+                    segmentsList.appendChild(summary);
+                }
+            } catch (error) {
+                console.error('Error loading segments:', error);
+            }
+        }
+
+        async function loadSpinsHistory() {
+            try {
+                const response = await fetch(`${API_BASE}/wheels/1/spins`);
+                const spins = await response.json();
+
+                const historyDiv = document.getElementById('spins-history');
+                historyDiv.innerHTML = '<h3>Últimos 10 giros:</h3>';
+
+                spins.slice(-10).reverse().forEach(spin => {
+                    const spinDiv = document.createElement('div');
+                    spinDiv.style.padding = '10px';
+                    spinDiv.style.border = '1px solid #eee';
+                    spinDiv.style.marginBottom = '5px';
+                    spinDiv.innerHTML = `
+                        <strong>${spin.result}</strong> - ${new Date(spin.createdAt).toLocaleString()}
+                    `;
+                    historyDiv.appendChild(spinDiv);
+                });
+            } catch (error) {
+                console.error('Error loading spins history:', error);
+            }
+        }
+
+        function showCreateWheelForm() {
+            document.getElementById('modal-title').textContent = 'Crear Nueva Ruleta';
+            document.getElementById('modal-content').innerHTML = `
+                <div class="form-group">
+                    <label>Nombre:</label>
+                    <input type="text" id="wheel-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Descripción:</label>
+                    <textarea id="wheel-description"></textarea>
+                </div>
+            `;
+            document.getElementById('modal-save-btn').onclick = createWheel;
+            document.getElementById('modal').style.display = 'block';
+        }
+
+        async function createWheel() {
+            const name = document.getElementById('wheel-name').value;
+            const description = document.getElementById('wheel-description').value;
+
+            console.log('Creating wheel:', { name, description });
+
+            try {
+                const response = await fetch(`${API_BASE}/wheels`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description })
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Wheel created successfully:', result);
+                    closeModal();
+                    loadWheels();
+                    alert('Ruleta creada exitosamente');
+                } else {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    alert('Error al crear la ruleta: ' + response.status + ' ' + errorText);
+                }
+            } catch (error) {
+                console.error('Network error:', error);
+                alert('Error de red al crear la ruleta: ' + error.message);
+            }
+        }
+
+        function showCreateSegmentForm() {
+            const wheelId = document.getElementById('wheel-select').value;
+            if (!wheelId) {
+                alert('Selecciona una ruleta primero');
+                return;
+            }
+
+            document.getElementById('modal-title').textContent = 'Crear Nuevo Segmento';
+            document.getElementById('modal-content').innerHTML = `
+                <div class="form-group">
+                    <label>Etiqueta del premio:</label>
+                    <input type="text" id="segment-label" required placeholder="Ej: iPhone 15">
+                </div>
+                <div class="form-group">
+                    <label>Probabilidad (peso relativo):</label>
+                    <input type="number" id="segment-probability" step="0.1" min="0.1" value="1.0" required>
+                    <small style="color: #666; font-size: 12px;">
+                        • La probabilidad se calcula como porcentaje relativo al total de todos los segmentos<br>
+                        • Un valor de 1.0 = probabilidad normal<br>
+                        • Un valor de 2.0 = el doble de probabilidad que uno de 1.0<br>
+                        • Un valor de 0.5 = la mitad de probabilidad que uno de 1.0
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label>Color:</label>
+                    <input type="color" id="segment-color" value="#ff0000">
+                </div>
+            `;
+            document.getElementById('modal-save-btn').onclick = () => createSegment(wheelId);
+            document.getElementById('modal').style.display = 'block';
+        }
+
+        async function createSegment(wheelId) {
+            const label = document.getElementById('segment-label').value;
+            const probability = parseFloat(document.getElementById('segment-probability').value);
+            const color = document.getElementById('segment-color').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/wheels/${wheelId}/segments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label, probability, color })
+                });
+
+                if (response.ok) {
+                    closeModal();
+                    loadSegments();
+                    alert('Segmento creado exitosamente');
+                } else {
+                    alert('Error al crear el segmento');
+                }
+            } catch (error) {
+                console.error('Error creating segment:', error);
+                alert('Error al crear el segmento');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        async function deleteWheel(wheelId) {
+            if (!confirm('¿Estás seguro de que quieres eliminar esta ruleta? Esta acción no se puede deshacer.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/wheels/${wheelId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    console.log('Wheel deleted successfully');
+                    loadWheels(); // Recargar la lista de ruletas
+                    loadDashboard(); // Actualizar estadísticas
+                    alert('Ruleta eliminada exitosamente');
+                } else {
+                    const errorText = await response.text();
+                    console.error('Error deleting wheel:', errorText);
+                    alert('Error al eliminar la ruleta: ' + response.status + ' ' + errorText);
+                }
+            } catch (error) {
+                console.error('Network error:', error);
+                alert('Error de red al eliminar la ruleta: ' + error.message);
+            }
+        }
+
+        async function editWheel(wheelId) {
+            try {
+                // Obtener los datos actuales de la ruleta
+                const response = await fetch(`${API_BASE}/wheels/${wheelId}`);
+                const wheel = await response.json();
+
+                document.getElementById('modal-title').textContent = 'Editar Ruleta';
+                document.getElementById('modal-content').innerHTML = `
+                    <div class="form-group">
+                        <label>Nombre:</label>
+                        <input type="text" id="wheel-name" value="${wheel.name}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción:</label>
+                        <textarea id="wheel-description">${wheel.description || ''}</textarea>
+                    </div>
+                `;
+                document.getElementById('modal-save-btn').onclick = () => updateWheel(wheelId);
+                document.getElementById('modal').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading wheel for edit:', error);
+                alert('Error al cargar la ruleta para editar');
+            }
+        }
+
+        async function updateWheel(wheelId) {
+            const name = document.getElementById('wheel-name').value;
+            const description = document.getElementById('wheel-description').value;
+
+            console.log('Updating wheel:', { wheelId, name, description });
+
+            try {
+                const response = await fetch(`${API_BASE}/wheels/${wheelId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description })
+                });
+
+                console.log('Response status:', response.status);
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Wheel updated successfully:', result);
+                    closeModal();
+                    loadWheels();
+                    alert('Ruleta actualizada exitosamente');
+                } else {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    alert('Error al actualizar la ruleta: ' + response.status + ' ' + errorText);
+                }
+            } catch (error) {
+                console.error('Network error:', error);
+                alert('Error de red al actualizar la ruleta: ' + error.message);
+            }
+        }
+
+        function loadSettings() {
+            // Cargar desde backend primero, luego localStorage como fallback
+            fetch('http://localhost:3001/tiktok/config')
+                .then(response => response.json())
+                .then(config => {
+                    document.getElementById('tiktok-username').value = config.username || '';
+                    document.getElementById('spin-command').value = config.spinCommand || '!spin';
+                    document.getElementById('gift-trigger').value = config.giftTrigger || 'Rose';
+
+                    // Guardar en localStorage para consistencia
+                    localStorage.setItem('tiktok-username', config.username || '');
+                    localStorage.setItem('spin-command', config.spinCommand || '!spin');
+                    localStorage.setItem('gift-trigger', config.giftTrigger || 'Rose');
+                })
+                .catch(error => {
+                    console.error('Error loading config from backend:', error);
+                    // Fallback a localStorage
+                    const username = localStorage.getItem('tiktok-username') || '';
+                    const command = localStorage.getItem('spin-command') || '!spin';
+                    const gift = localStorage.getItem('gift-trigger') || 'Rose';
+
+                    document.getElementById('tiktok-username').value = username;
+                    document.getElementById('spin-command').value = command;
+                    document.getElementById('gift-trigger').value = gift;
+                });
+        }
+
+        function saveSettings() {
+            const username = document.getElementById('tiktok-username').value;
+            const command = document.getElementById('spin-command').value;
+            const gift = document.getElementById('gift-trigger').value;
+
+            // Guardar en localStorage para persistencia en el frontend
+            localStorage.setItem('tiktok-username', username);
+            localStorage.setItem('spin-command', command);
+            localStorage.setItem('gift-trigger', gift);
+
+            // Enviar configuración al backend
+            fetch('http://localhost:3001/tiktok/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    spinCommand: command,
+                    giftTrigger: gift
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Configuración guardada en backend:', data);
+                // Reconectar TikTok con nueva configuración
+                return fetch('http://localhost:3001/tiktok/reconnect', {
+                    method: 'POST'
+                });
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Reconexión TikTok:', data);
+                alert('Configuración guardada y servidor reconectado. Los cambios están activos.');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Configuración guardada localmente, pero hubo un error al actualizar el servidor. Reinicia manualmente si es necesario.');
+            });
+        }
+
+        async function editSegment(segmentId, wheelId) {
+            try {
+                // Obtener datos del segmento actual
+                const wheelResponse = await fetch(`${API_BASE}/wheels/${wheelId}`);
+                const wheel = await wheelResponse.json();
+                const segment = wheel.segments.find(s => s.id === segmentId);
+                
+                if (!segment) {
+                    alert('Segmento no encontrado');
+                    return;
+                }
+
+                document.getElementById('modal-title').textContent = 'Editar Segmento';
+                document.getElementById('modal-content').innerHTML = `
+                    <div class="form-group">
+                        <label>Etiqueta del premio:</label>
+                        <input type="text" id="segment-label" value="${segment.label}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Probabilidad (peso relativo):</label>
+                        <input type="number" id="segment-probability" step="0.1" min="0.1" value="${segment.probability}" required>
+                        <small style="color: #666; font-size: 12px;">
+                            • La probabilidad se calcula como porcentaje relativo al total de todos los segmentos<br>
+                            • Un valor de 1.0 = probabilidad normal<br>
+                            • Un valor de 2.0 = el doble de probabilidad que uno de 1.0<br>
+                            • Un valor de 0.5 = la mitad de probabilidad que uno de 1.0
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label>Color:</label>
+                        <input type="color" id="segment-color" value="${segment.color}">
+                    </div>
+                `;
+                document.getElementById('modal-save-btn').onclick = () => updateSegment(segmentId, wheelId);
+                document.getElementById('modal').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading segment for edit:', error);
+                alert('Error al cargar el segmento para editar');
+            }
+        }
+
+        async function updateSegment(segmentId, wheelId) {
+            const label = document.getElementById('segment-label').value;
+            const probability = parseFloat(document.getElementById('segment-probability').value);
+            const color = document.getElementById('segment-color').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/wheels/${wheelId}/segments/${segmentId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label, probability, color })
+                });
+
+                if (response.ok) {
+                    closeModal();
+                    loadSegments();
+                    alert('Segmento actualizado exitosamente');
+                } else {
+                    const errorText = await response.text();
+                    alert('Error al actualizar el segmento: ' + errorText);
+                }
+            } catch (error) {
+                console.error('Error updating segment:', error);
+                alert('Error al actualizar el segmento');
+            }
+        }
+
+        async function deleteSegment(segmentId, wheelId) {
+            if (!confirm('¿Estás seguro de que quieres eliminar este segmento? Esta acción no se puede deshacer.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/wheels/${wheelId}/segments/${segmentId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadSegments();
+                    alert('Segmento eliminado exitosamente');
+                } else {
+                    const errorText = await response.text();
+                    alert('Error al eliminar el segmento: ' + errorText);
+                }
+            } catch (error) {
+                console.error('Error deleting segment:', error);
+                alert('Error al eliminar el segmento');
+            }
+        }
+
+        async function manageSegments(wheelId) {
+            // Cambiar a la sección de segmentos
+            showSection('segments');
+            
+            // Esperar un momento para que la sección se cargue
+            setTimeout(() => {
+                const select = document.getElementById('wheel-select');
+                
+                // Seleccionar la ruleta en el dropdown
+                select.value = wheelId;
+                
+                // Cargar los segmentos
+                loadSegments();
+            }, 100);
+        }
+    </script>
+</body>
+</html>
